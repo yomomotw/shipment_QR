@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ d.model }} {{ d.serial }}{% endblock %}
+{% block bodyclass %}public{% endblock %}
+{% block body %}
+<div class="pub">
+  <h1>{{ d.model }}</h1>
+  <p class="mono" style="margin:0 0 8px">序號 {{ d.serial }}</p>
+  <span class="badge {{ 'ok' if d.in_warranty else 'off' }}">{{ '保固內' if d.in_warranty else '已過保' }}</span>
+  {% if d.service_tel %}<a class="call" href="tel:{{ d.service_tel }}">撥打叫修電話 {{ d.service_tel }}</a>{% endif %}
+  <dl class="kv">
+    {% if d.spec_lines %}<dt>規格</dt><dd>{{ d.spec_lines|join('\n') }}</dd>{% endif %}
+    {% if d.ship_date %}<dt>出貨日期</dt><dd>{{ d.ship_date }}</dd>{% endif %}
+    {% if d.cust_po %}<dt>客戶訂單</dt><dd>{{ d.cust_po }}</dd>{% endif %}
+    {% if d.int_po %}<dt>內部訂單</dt><dd>{{ d.int_po }}</dd>{% endif %}
+    {% if d.warranty %}<dt>保固期間</dt><dd>{{ d.warranty }}</dd>{% endif %}
+  </dl>
+  <p class="hint" style="margin-top:24px">線上報修功能即將開放。目前請撥打叫修電話。</p>
+</div>
+{% endblock %}

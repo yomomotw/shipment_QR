@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}設備台帳{% endblock %}
+{% block body %}
+<main>
+  <div class="card">
+    <h2>設備台帳</h2>
+    <form method="get" action="/devices" class="toolbar">
+      <div style="flex:1"><label>搜尋序號、型號、訂單號、客戶名稱</label><input name="q" value="{{ q }}"></div>
+      <button type="submit">搜尋</button>
+      <a class="btn primary" href="/devices/new">建檔與印標籤</a>
+    </form>
+    {% if devices %}
+    <table class="data">
+      <thead><tr><th>序號</th><th>型號</th><th>客戶</th><th>客戶訂單</th><th>內部訂單</th><th>出貨日期</th><th>保固到期</th><th></th></tr></thead>
+      <tbody>
+      {% for d in devices %}
+      <tr>
+        <td class="mono"><a href="/devices/{{ d.id }}">{{ d.serial }}</a></td>
+        <td>{{ d.model }}</td><td>{{ d.customer_name }}</td><td>{{ d.cust_po }}</td><td>{{ d.int_po }}</td>
+        <td>{{ d.ship_date }}</td>
+        <td>{{ d.warranty_end }} <span class="badge {{ 'ok' if d.warranty_end >= today else 'off' }}">{{ '保固內' if d.warranty_end >= today else '已過保' }}</span></td>
+        <td>{% if d.batch_id %}<a href="/batches/{{ d.batch_id }}">同批標籤</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="hint">最多顯示 200 筆，請用搜尋縮小範圍。</div>
+    {% else %}
+    <p>{{ '找不到符合的設備。' if q else '台帳還沒有設備。' }}</p>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

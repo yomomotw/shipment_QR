@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}登入{% endblock %}
+{% block body %}
+<main class="narrow">
+  <div class="card">
+    <h2>登入</h2>
+    {% if error %}<div class="msg e">{{ error }}</div>{% endif %}
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label>Email</label>
+      <input name="email" type="email" autocomplete="username" required autofocus>
+      <label>密碼</label>
+      <input name="password" type="password" autocomplete="current-password" required>
+      <div class="btns"><button class="primary" type="submit">登入</button></div>
+    </form>
+  </div>
+</main>
+{% endblock %}

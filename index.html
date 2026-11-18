@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出貨標籤 QR 轉換器</title>
+<script src="vendor/qrcode.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #fff; --ink: #1d2433; --muted: #6b7280;
+    --line: #d9dde3; --accent: #1f5eff; --err: #c62828; --warn: #b26a00; --ok: #2e7d32;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { padding: 14px 24px; background: var(--ink); color: #fff; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  main { display: grid; grid-template-columns: 400px 1fr; gap: 20px; padding: 20px 24px; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .card h2 { margin: 0 0 6px; font-size: 15px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  label .req { color: var(--err); }
+  input, textarea, select { width: 100%; padding: 8px 10px; font-size: 14px; border: 1px solid var(--line);
+         border-radius: 6px; font-family: inherit; background: #fff; color: var(--ink); }
+  textarea { min-height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .range { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 6px; margin-top: 6px; }
+  .range input { font-size: 13px; padding: 6px 8px; }
+  button { padding: 8px 14px; font-size: 14px; border-radius: 6px; border: 1px solid var(--line);
+           background: #fff; cursor: pointer; font-family: inherit; color: var(--ink); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .msgs { margin-top: 12px; font-size: 13px; }
+  .msgs div { padding: 6px 10px; border-radius: 6px; margin-bottom: 6px; }
+  .msgs .e { background: #fdecea; color: var(--err); }
+  .msgs .w { background: #fff4e5; color: var(--warn); }
+  .msgs .o { background: #edf7ed; color: var(--ok); }
+  .check { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink); margin-top: 10px; }
+  .check input { width: auto; }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; }
+  .toolbar > div { min-width: 150px; }
+  .toolbar label { margin-top: 0; }
+  details { margin-top: 12px; font-size: 13px; }
+  details pre { background: #f7f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 8px;
+                white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+
+  /* ===== 列印區 ===== */
+  .sheet-wrap { background: #e9ebef; border-radius: 8px; padding: 16px; overflow: auto; }
+  .sheet { background: #fff; color: #000; width: 210mm; margin: 0 auto; padding: 8mm; }
+  .empty { color: var(--muted); font-size: 14px; padding: 60px 20px; text-align: center; }
+
+  /* ===== 小長方形標籤 ===== */
+  .tags { display: flex; flex-wrap: wrap; gap: 3mm; }
+  .tag { width: var(--lw); height: var(--lh); border: .3mm solid #000; display: flex; overflow: hidden;
+         break-inside: avoid; page-break-inside: avoid; background: #fff; font-size: var(--fs); }
+  .tag .qr { flex: none; width: var(--qw); height: 100%; display: flex; align-items: center; justify-content: center;
+             border-right: .3mm solid #000; padding: .8mm; }
+  .tag .qr svg { width: 100%; height: auto; max-height: 100%; display: block; }
+  .tag table { flex: 1; min-width: 0; border-collapse: collapse; table-layout: fixed; height: 100%; }
+  .tag td { border-bottom: .2mm solid #000; padding: 0 .9mm; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; line-height: 1.15; vertical-align: middle; }
+  .tag tr:last-child td { border-bottom: 0; }
+  .tag td.k { width: var(--kw); background: #eee; color: #222; border-right: .2mm solid #000; font-size: .92em; }
+  .tag tr.sn td.v { font-weight: 700; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.12em; }
+  .tag tr.tel td { font-weight: 700; }
+
+  .sheet.single { width: auto; background: none; padding: 0; }
+  .sheet.single .tags { flex-direction: column; align-items: center; }
+
+  @media print {
+    body { background: #fff; }
+    header, .no-print { display: none !important; }
+    main { display: block; padding: 0; }
+    .card { border: 0; padding: 0; background: none; }
+    .sheet-wrap { padding: 0; background: none; overflow: visible; }
+    .sheet { width: auto; margin: 0; padding: 0; }
+    .sheet.single .tags { display: block; }
+    .sheet.single .tag { border: 0; page-break-after: always; break-after: page; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+<style id="pageStyle">@media print { @page { size: A4; margin: 8mm; } }</style>
+</head>
+<body>
+<header class="no-print"><h1>出貨標籤 QR 轉換器 <span style="font-weight:400;font-size:13px;opacity:.7">— 一台設備一張 QR</span></h1></header>
+<main>
+  <section class="card no-print">
+    <h2>出貨資料</h2>
+
+    <label>叫修電話 <span class="req">*</span></label>
+    <input id="tel" placeholder="例：0800-123-456">
+    <div class="hint">會自動記住，下次不用重打</div>
+
+    <label>型號 <span class="req">*</span></label>
+    <input id="model" placeholder="例：XYZ-200">
+
+    <div class="row">
+      <div>
+        <label>出貨日期 <span class="req">*</span></label>
+        <input id="shipDate" type="date">
+      </div>
+      <div>
+        <label>數量 <span class="req">*</span></label>
+        <input id="qty" type="number" min="1" step="1" placeholder="用來核對序號數">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>客戶訂單編號 <span class="req">*</span></label>
+        <input id="custPo" placeholder="例：PO-889012">
+      </div>
+      <div>
+        <label>內部訂單編號 <span class="req">*</span></label>
+        <input id="intPo" placeholder="例：SO-2026-1116-01">
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="showInt" checked> QR 內包含內部訂單編號</label>
+
+    <label>序號（一台一個） <span class="req">*</span></label>
+    <textarea id="serials" placeholder="一行一個，或用逗號分隔&#10;連號可寫成範圍，例如：&#10;SN0001~SN0050"></textarea>
+    <div class="hint">連號產生：前綴 / 起號 / 迄號（起號位數決定補零）</div>
+    <div class="range">
+      <input id="rPrefix" placeholder="前綴 例 SN">
+      <input id="rStart" placeholder="起 0001">
+      <input id="rEnd" placeholder="迄 0050">
+      <button id="rAdd" type="button">加入</button>
+    </div>
+    <div class="meta" id="snCount">已解析 0 個序號</div>
+
+    <label>QR 內容格式</label>
+    <select id="fmt">
+      <option value="text">純文字（手機掃了直接看得懂）</option>
+      <option value="json">JSON（給系統讀取）</option>
+    </select>
+
+    <div class="btns">
+      <button class="primary" id="gen" type="button">產生標籤</button>
+      <button id="clear" type="button">清空</button>
+    </div>
+    <div class="msgs" id="msgs"></div>
+    <details>
+      <summary>QR 內容範例（第一台）</summary>
+      <pre id="sample">—</pre>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="toolbar no-print">
+      <div>
+        <label>版面</label>
+        <select id="layout">
+          <option value="grid">A4 拼版（印完剪下）</option>
+          <option value="single">標籤機（一張一頁）</option>
+        </select>
+      </div>
+      <div>
+        <label>標籤尺寸</label>
+        <select id="lsize">
+          <option value="60x30">60 × 30 mm</option>
+          <option value="60x40" selected>60 × 40 mm</option>
+          <option value="70x40">70 × 40 mm</option>
+          <option value="80x50">80 × 50 mm</option>
+          <option value="50x30">50 × 30 mm</option>
+        </select>
+      </div>
+      <button class="primary" id="print" disabled>列印 / 存成 PDF</button>
+      <button id="dlZip" disabled>下載全部 QR 圖檔 (ZIP)</button>
+      <button id="dlCsv" disabled>下載清單 (CSV)</button>
+    </div>
+    <div class="sheet-wrap"><div class="sheet" id="sheet"><div class="empty">填好左側資料後按「產生標籤」</div></div></div>
+  </section>
+</main>
+
+<script>
+(() => {
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+  const $ = id => document.getElementById(id);
+  let devices = [];   // [{ no, sn, payload, qr }]
+  let shared = null;  // 共用欄位
+
+  const todayStr = () => {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  $('shipDate').value = todayStr();
+  try { $('tel').value = localStorage.getItem('shipqr.tel') || ''; } catch {}
+
+  // ---------- 序號解析 ----------
+  function expandRange(token) {
+    const m = token.match(/^(.*?)(\d+)\s*~\s*(.*?)(\d+)(.*)$/);
+    if (!m) throw new Error(`無法解析範圍「${token}」`);
+    const [, p1, a, p2, b, suffix] = m;
+    if (p2 && p2 !== p1) throw new Error(`範圍「${token}」前後前綴不一致`);
+    const s = parseInt(a, 10), e = parseInt(b, 10);
+    if (e < s) throw new Error(`範圍「${token}」迄號小於起號`);
+    if (e - s >= 5000) throw new Error(`範圍「${token}」超過 5000 台，請分批`);
+    const out = [];
+    for (let i = s; i <= e; i++) out.push(p1 + String(i).padStart(a.length, '0') + suffix);
+    return out;
+  }
+  function parseSerials(text) {
+    const out = [];
+    for (const t of text.split(/[\n,，;；\t]+/).map(t => t.trim()).filter(Boolean))
+      t.includes('~') ? out.push(...expandRange(t)) : out.push(t);
+    return out;
+  }
+  function updateCount() {
+    try { $('snCount').textContent = `已解析 ${parseSerials($('serials').value).length} 個序號`; }
+    catch (e) { $('snCount').textContent = e.message; }
+  }
+  $('serials').addEventListener('input', updateCount);
+  $('rAdd').onclick = () => {
+    const p = $('rPrefix').value.trim(), a = $('rStart').value.trim(), b = $('rEnd').value.trim();
+    if (!/^\d+$/.test(a) || !/^\d+$/.test(b)) { showMsgs([['e', '起號與迄號必須是數字']]); return; }
+    const ta = $('serials');
+    ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + `${p}${a}~${p}${b.padStart(a.length, '0')}`;
+    updateCount();
+  };
+
+  function showMsgs(list) {
+    $('msgs').innerHTML = '';
+    for (const [k, t] of list) { const d = document.createElement('div'); d.className = k; d.textContent = t; $('msgs').appendChild(d); }
+  }
+
+  // ---------- QR ----------
+  function payloadFor(s, sn) {
+    if ($('fmt').value === 'json') {
+      const o = { v: 1, model: s.model, sn, ship_date: s.shipDate, cust_po: s.custPo };
+      if (s.showInt) o.int_po = s.intPo;
+      o.service_tel = s.tel;
+      return JSON.stringify(o);
+    }
+    const lines = [`型號:${s.model}`, `序號:${sn}`, `出貨日期:${s.shipDate}`, `客戶訂單:${s.custPo}`];
+    if (s.showInt) lines.push(`內部訂單:${s.intPo}`);
+    lines.push(`叫修電話:${s.tel}`);
+    return lines.join('\n');
+  }
+  function makeQr(text) { const q = qrcode(0, 'M'); q.addData(text, 'Byte'); q.make(); return q; }
+  function qrSvg(qr, margin = 2) {
+    const n = qr.getModuleCount(), size = n + margin * 2;
+    let d = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+      if (qr.isDark(r, c)) d += `M${c + margin},${r + margin}h1v1h-1z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges">` +
+           `<rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  }
+  function qrPngBytes(qr, px = 10, margin = 4) {
+    const n = qr.getModuleCount(), size = (n + margin * 2) * px;
+    const cv = document.createElement('canvas'); cv.width = cv.height = size;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size); ctx.fillStyle = '#000';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+      if (qr.isDark(r, c)) ctx.fillRect((c + margin) * px, (r + margin) * px, px, px);
+    return new Promise(res => cv.toBlob(b => b.arrayBuffer().then(ab => res(new Uint8Array(ab))), 'image/png'));
+  }
+
+  // ---------- 產生 ----------
+  function generate() {
+    const errs = [];
+    const s = {
+      tel: $('tel').value.trim(), model: $('model').value.trim(), shipDate: $('shipDate').value,
+      custPo: $('custPo').value.trim(), intPo: $('intPo').value.trim(), showInt: $('showInt').checked,
+    };
+    const qty = $('qty').value.trim();
+    if (!s.tel) errs.push('請填寫叫修電話');
+    if (!s.model) errs.push('請填寫型號');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s.shipDate)) errs.push('請選擇出貨日期');
+    if (!s.custPo) errs.push('請填寫客戶訂單編號');
+    if (!s.intPo) errs.push('請填寫內部訂單編號');
+    if (!/^\d+$/.test(qty) || +qty < 1) errs.push('數量必須是正整數');
+    let serials = [];
+    try { serials = parseSerials($('serials').value); } catch (e) { errs.push(e.message); }
+    if (!serials.length) errs.push('請填寫序號');
+    const seen = new Set(), dup = new Set();
+    serials.forEach(x => seen.has(x) ? dup.add(x) : seen.add(x));
+    if (dup.size) errs.push(`序號重複：${[...dup].slice(0, 5).join(', ')}${dup.size > 5 ? ' …' : ''}`);
+    if (serials.length && /^\d+$/.test(qty) && serials.length !== +qty)
+      errs.push(`序號數量（${serials.length}）與出貨數量（${qty}）不符`);
+    if (errs.length) { showMsgs(errs.map(e => ['e', e])); return; }
+
+    try { localStorage.setItem('shipqr.tel', s.tel); } catch {}
+    shared = s;
+    devices = serials.map((sn, i) => { const payload = payloadFor(s, sn); return { no: i + 1, sn, payload, qr: makeQr(payload) }; });
+    $('sample').textContent = devices[0].payload;
+    render();
+    showMsgs([['o', `已產生 ${devices.length} 張獨立 QR（每台設備一張）`]]);
+    ['print', 'dlZip', 'dlCsv'].forEach(id => $(id).disabled = false);
+  }
+  $('gen').onclick = generate;
+
+  // ---------- 排版 ----------
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  function tagNode(d) {
+    const t = el('div', 'tag');
+    const q = el('div', 'qr'); q.innerHTML = qrSvg(d.qr, 1); t.appendChild(q);
+    const tb = el('table'), body = el('tbody');
+    const add = (k, v, cls) => {
+      const tr = el('tr', cls);
+      tr.appendChild(el('td', 'k', k));
+      const td = el('td', 'v', v); td.title = v; tr.appendChild(td);
+      body.appendChild(tr);
+    };
+    add('序號', d.sn, 'sn');
+    add('型號', shared.model);
+    add('叫修電話', shared.tel, 'tel');
+    tb.appendChild(body); t.appendChild(tb);
+    return t;
+  }
+
+  function render() {
+    const sheet = $('sheet'), layout = $('layout').value;
+    const [lw, lh] = $('lsize').value.split('x').map(Number);
+    $('pageStyle').textContent = layout === 'single'
+      ? `@media print { @page { size: ${lw}mm ${lh}mm; margin: 0; } }`
+      : `@media print { @page { size: A4; margin: 8mm; } }`;
+    // 依標籤尺寸算 QR 寬、字級
+    const rows = 3; // 標籤只顯示：序號、型號、叫修電話（其餘只放在 QR 內）
+    const qw = Math.min(lh, lw * 0.45);
+    const fs = Math.min((lh / rows) * 0.3, (lw - qw) / 14);
+    sheet.style.setProperty('--lw', lw + 'mm');
+    sheet.style.setProperty('--lh', lh + 'mm');
+    sheet.style.setProperty('--qw', qw.toFixed(2) + 'mm');
+    sheet.style.setProperty('--fs', fs.toFixed(2) + 'mm');
+    sheet.style.setProperty('--kw', (fs * 4.4).toFixed(2) + 'mm');
+    if (!devices.length) return;
+    sheet.innerHTML = '';
+    sheet.className = 'sheet' + (layout === 'single' ? ' single' : '');
+    const wrap = el('div', 'tags');
+    devices.forEach(d => wrap.appendChild(tagNode(d)));
+    sheet.appendChild(wrap);
+  }
+  ['layout', 'lsize'].forEach(id => $(id).onchange = render);
+
+  // ---------- 匯出 ----------
+  const safe = s => String(s).replace(/[\\/:*?"<>|\s]+/g, '_');
+  function download(blob, name) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  $('print').onclick = () => window.print();
+
+  $('dlCsv').onclick = () => {
+    const q = v => `"${String(v).replace(/"/g, '""')}"`;
+    const head = ['#', '序號', '型號', '出貨日期', '客戶訂單編號', '內部訂單編號', '叫修電話', 'QR內容'];
+    const rows = devices.map(d => [d.no, d.sn, shared.model, shared.shipDate, shared.custPo, shared.intPo, shared.tel, d.payload].map(q).join(','));
+    download(new Blob(['﻿' + [head.map(q).join(','), ...rows].join('\r\n')], { type: 'text/csv' }),
+      `出貨清單_${safe(shared.intPo)}_${shared.shipDate}.csv`);
+  };
+
+  // 簡易 ZIP（不壓縮，store）
+  const crcTable = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = crcTable[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  function makeZip(files) {
+    const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), crc = crc32(f.data), sz = f.data.length;
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, sz, true); lh.setUint32(22, sz, true); lh.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(lh.buffer), name, f.data);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, sz, true); ch.setUint32(24, sz, true); ch.setUint16(28, name.length, true);
+      ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + sz;
+    }
+    const cdSize = central.reduce((a, b) => a + b.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+  }
+  $('dlZip').onclick = async () => {
+    $('dlZip').disabled = true; $('dlZip').textContent = '打包中…';
+    const files = [];
+    for (const d of devices) files.push({ name: `${safe(d.sn)}.png`, data: await qrPngBytes(d.qr) });
+    download(makeZip(files), `QR_${safe(shared.intPo)}_${shared.shipDate}.zip`);
+    $('dlZip').disabled = false; $('dlZip').textContent = '下載全部 QR 圖檔 (ZIP)';
+  };
+
+  $('clear').onclick = () => {
+    ['model', 'qty', 'custPo', 'intPo', 'serials', 'rPrefix', 'rStart', 'rEnd'].forEach(id => $(id).value = '');
+    $('shipDate').value = todayStr(); updateCount(); showMsgs([]);
+  };
+  render();
+})();
+</script>
+</body>
+</html>

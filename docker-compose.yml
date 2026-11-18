@@ -1,0 +1,10 @@
+services:
+  shipment-qr:
+    build: .
+    container_name: shipment-qr
+    ports:
+      - "8088:8000"
+    env_file: .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

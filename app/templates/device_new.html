@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}建檔與印標籤{% endblock %}
+{% block head %}<script src="/static/vendor/qrcode.js"></script><script src="/static/label.js"></script>{% endblock %}
+{% block body %}
+<main>
+  {% if not service_tel %}
+  <div class="msg w">尚未設定叫修電話，無法建檔。請先到<a href="/admin/settings">系統設定</a>填寫（需負責人權限）。</div>
+  {% endif %}
+  <form id="f" class="two">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="card">
+      <h2>設備資料</h2>
+      <label>型號 <span class="req">*</span></label>
+      <input name="model" placeholder="例：XYZ-200">
+      <label>規格（可一次貼入多行；不印在標籤上）</label>
+      <textarea name="spec" placeholder="電壓 24V&#10;黑色外殼"></textarea>
+      <div class="row">
+        <div><label>出貨日期 <span class="req">*</span></label><input name="ship_date" type="date" value="{{ today }}"></div>
+        <div><label>數量 <span class="req">*</span></label><input name="qty" type="number" min="1" step="1"></div>
+      </div>
+      <div class="row">
+        <div><label>客戶訂單編號 <span class="req">*</span></label><input name="cust_po"></div>
+        <div><label>內部訂單編號 <span class="req">*</span></label><input name="int_po"></div>
+      </div>
+      <label>客戶名稱</label>
+      <input name="customer_name">
+      <div class="row">
+        <div><label>保固長度（月）</label><input name="warranty_months" type="number" min="0" step="1" value="{{ default_months }}"></div>
+        <div><label>保固開始日</label><input name="warranty_start" type="date">
+          <div class="hint">留空就用出貨日期</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>序號與 QR</h2>
+      <label>序號（一台一個） <span class="req">*</span></label>
+      <textarea name="serials" placeholder="一行一個，或用逗號分隔&#10;連號可寫成 SN0001~SN0050"></textarea>
+      <label>要寫進 QR 的資料</label>
+      <div class="hint">型號、序號、叫修電話（{{ service_tel or '未設定' }}）固定寫入。勾選越多 QR 越密。</div>
+      <div class="checks">
+        {% for key, label in qr_choices %}
+        <label><input type="checkbox" name="qr_fields" value="{{ key }}"> {{ label }}</label>
+        {% endfor %}
+      </div>
+      <div class="hint">
+        {% if base_url %}已設定對外網址，QR 最後會多一行線上報修網址。
+        {% else %}尚未設定對外網址，QR 裡只有資料，不含線上報修網址。{% endif %}
+      </div>
+      <label>標籤尺寸</label>
+      <select name="label_size">
+        {% for s in sizes %}<option value="{{ s }}" {{ 'selected' if s == '60x40' }}>{{ s.replace('x', ' × ') }} mm</option>{% endfor %}
+      </select>
+      <div class="btns">
+        <button type="button" id="preview">檢查並預覽</button>
+        <button type="button" id="create" class="primary" disabled>建立並前往列印</button>
+      </div>
+      <div id="msgs" style="margin-top:12px"></div>
+      <div id="pv" style="display:none">
+        <label>第一台的 QR 內容</label>
+        <pre class="payload" id="sample"></pre>
+        <label>標籤預覽</label>
+        <div class="sheet-wrap"><div class="sheet single" id="pvSheet"></div></div>
+      </div>
+    </div>
+  </form>
+</main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), form = $('f');
+  const show = list => { $('msgs').innerHTML = ''; for (const [k, t] of list) { const d = document.createElement('div'); d.className = 'msg ' + k; d.textContent = t; $('msgs').appendChild(d); } };
+  const post = async url => { const r = await fetch(url, { method: 'POST', body: new FormData(form) }); return [r.ok, await r.json().catch(() => ({ errors: ['伺服器回應異常，請重新整理後再試'] }))]; };
+  const invalidate = () => { $('create').disabled = true; };
+  form.addEventListener('input', invalidate); form.addEventListener('change', invalidate);
+
+  $('preview').onclick = async () => {
+    const [ok, data] = await post('/devices/preview');
+    if (!ok) { show((data.errors || [data.detail || '檢查失敗']).map(e => ['e', e])); $('pv').style.display = 'none'; return; }
+    const size = form.label_size.value, msgs = [];
+    let den;
+    try { den = ShipLabel.density(data.longest, size); }
+    catch (e) { show([['e', 'QR 內容太多，無法產生。請減少勾選的資料或縮短規格。']]); return; }
+    msgs.push(['o', `檢查通過：共 ${data.count} 台，保固到期日 ${data.warranty_end}。QR 版本 ${den.version}，每格約 ${den.moduleMm.toFixed(2)} mm。`]);
+    if (den.tooDense) msgs.push(['w', `QR 偏密（每格小於 ${ShipLabel.MIN_MODULE_MM} mm），這個尺寸的標籤可能不好掃。可以少勾幾項、縮短規格，或選大一點的標籤。仍可建立。`]);
+    show(msgs);
+    $('sample').textContent = data.sample;
+    ShipLabel.renderSheet($('pvSheet'), [data.first], size, 'single');
+    $('pv').style.display = '';
+    $('create').disabled = false;
+  };
+  $('create').onclick = async () => {
+    $('create').disabled = true;
+    const [ok, data] = await post('/devices');
+    if (!ok) { show((data.errors || [data.detail || '建立失敗']).map(e => ['e', e])); return; }
+    location.href = data.redirect;
+  };
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ d.serial }}{% endblock %}
+{% block head %}<script src="/static/vendor/qrcode.js"></script><script src="/static/label.js"></script>{% endblock %}
+{% block body %}
+<main>
+  {% if saved == 1 %}<div class="msg o">已儲存。</div>{% elif saved == 2 %}<div class="msg o">已重新產生 QR。請補印並換貼標籤。</div>{% endif %}
+  {% if stale %}
+  <div class="msg w">目前的資料與已印出的 QR 內容不同（可能是印出後改過資料，或對外網址是之後才設定的）。標籤上的 QR 仍是當時的內容。需要更新的話，請負責人重新產生 QR 並換貼標籤。</div>
+  {% endif %}
+  <div class="two">
+    <div class="card">
+      <h2><span class="mono">{{ d.serial }}</span>
+        <span class="badge {{ 'ok' if in_warranty else 'off' }}">{{ '保固內' if in_warranty else '已過保' }}</span></h2>
+      {% if can_edit %}
+      <form method="post" action="/devices/{{ d.id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>型號</label><input name="model" value="{{ d.model }}">
+        <label>規格</label><textarea name="spec">{{ d.spec }}</textarea>
+        <div class="row3">
+          <div><label>出貨日期</label><input name="ship_date" type="date" value="{{ d.ship_date }}"></div>
+          <div><label>保固長度（月）</label><input name="warranty_months" type="number" min="0" value="{{ d.warranty_months }}"></div>
+          <div><label>保固開始日</label><input name="warranty_start" type="date" value="{{ d.warranty_start }}"></div>
+        </div>
+        <div class="hint">保固到期日：{{ d.warranty_end }}（儲存後依開始日與長度重算）</div>
+        <div class="row">
+          <div><label>客戶訂單編號</label><input name="cust_po" value="{{ d.cust_po }}"></div>
+          <div><label>內部訂單編號</label><input name="int_po" value="{{ d.int_po }}"></div>
+        </div>
+        <label>客戶名稱</label><input name="customer_name" value="{{ d.customer_name }}">
+        <label>備註</label><textarea name="note" style="min-height:60px">{{ d.note }}</textarea>
+        <div class="hint">序號不能修改。修改這裡的資料不會改變已印出的 QR。</div>
+        <div class="btns"><button class="primary" type="submit">儲存</button></div>
+      </form>
+      {% else %}
+      <dl class="kv">
+        <dt>型號</dt><dd>{{ d.model }}</dd><dt>規格</dt><dd>{{ d.spec or '—' }}</dd>
+        <dt>出貨日期</dt><dd>{{ d.ship_date }}</dd><dt>保固</dt><dd>{{ d.warranty_start }} ~ {{ d.warranty_end }}</dd>
+        <dt>客戶</dt><dd>{{ d.customer_name or '—' }}</dd><dt>客戶訂單</dt><dd>{{ d.cust_po }}</dd>
+        <dt>內部訂單</dt><dd>{{ d.int_po }}</dd><dt>備註</dt><dd>{{ d.note or '—' }}</dd>
+      </dl>
+      {% endif %}
+    </div>
+    <div>
+      <div class="card">
+        <h2>標籤與 QR</h2>
+        <div class="sheet-wrap"><div class="sheet single" id="sheet"></div></div>
+        <label>QR 內容（印出時的原文）</label>
+        <pre class="payload">{{ d.qr_payload }}</pre>
+        <dl class="kv" style="margin-top:10px">
+          <dt>QR 額外帶出</dt><dd>{{ qr_labels|join('、') or '無（只有型號、序號、叫修電話）' }}</dd>
+          <dt>線上報修網址</dt><dd>{% if public_url %}<a href="{{ public_url }}">{{ public_url }}</a>{% else %}尚未設定對外網址{% endif %}</dd>
+        </dl>
+        <div class="btns">
+          {% if can_edit %}<a class="btn" href="/devices/{{ d.id }}/label">補印標籤</a>{% endif %}
+          {% if d.batch_id and can_edit %}<a class="btn" href="/batches/{{ d.batch_id }}">同批標籤</a>{% endif %}
+        </div>
+        {% if user.role == 'manager' %}
+        <form method="post" action="/devices/{{ d.id }}/regenerate-qr" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="checks"><label><input type="checkbox" name="confirm" value="yes"> 我了解重新產生後，已貼出的舊標籤內容會與系統不一致，需要換貼</label></div>
+          <div class="btns"><button class="danger" type="submit">用目前資料重新產生 QR</button></div>
+        </form>
+        {% endif %}
+      </div>
+      <div class="card"><h2>工單履歷</h2><p class="hint">工單功能在第二階段加入。</p></div>
+    </div>
+  </div>
+</main>
+<script id="row" type="application/json">{{ row|tojson }}</script>
+<script>ShipLabel.renderSheet(document.getElementById('sheet'), [JSON.parse(document.getElementById('row').textContent)], {{ (d.batch.label_size if d.batch else '60x40')|tojson }}, 'single');</script>
+{% endblock %}

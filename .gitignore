@@ -1,0 +1,9 @@
+data/
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+Claude outputs/
+*.pdf
+publish_v0.1.sh

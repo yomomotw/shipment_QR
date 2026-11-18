@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}使用者{% endblock %}
+{% block body %}
+<main>
+  <div class="card">
+    <h2>使用者</h2>
+    <table class="data">
+      <thead><tr><th>姓名</th><th>Email</th><th>角色</th><th>狀態</th><th>重設密碼</th><th></th></tr></thead>
+      <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.name }}</td><td>{{ u.email }}</td>
+        <td><form method="post" action="/admin/users/{{ u.id }}" style="display:flex;gap:6px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="role">
+          <select name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ ROLE_LABELS[r] }}</option>{% endfor %}</select>
+          <button type="submit">變更</button></form></td>
+        <td><span class="badge {{ 'ok' if u.is_active else 'off' }}">{{ '啟用' if u.is_active else '已停用' }}</span></td>
+        <td><form method="post" action="/admin/users/{{ u.id }}" style="display:flex;gap:6px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="password">
+          <input name="password" type="password" placeholder="新密碼（至少 8 字元）" autocomplete="new-password">
+          <button type="submit">重設</button></form></td>
+        <td>{% if u.id != user.id %}<form method="post" action="/admin/users/{{ u.id }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="toggle">
+          <button type="submit">{{ '停用' if u.is_active else '啟用' }}</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card" style="max-width:520px">
+    <h2>新增使用者</h2>
+    {% if error %}<div class="msg e">{{ error }}</div>{% endif %}
+    <form method="post" action="/admin/users">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>姓名</label><input name="name" required>
+      <label>Email（登入帳號）</label><input name="email" type="email" required>
+      <label>角色</label>
+      <select name="role">{% for r in roles %}<option value="{{ r }}">{{ ROLE_LABELS[r] }}</option>{% endfor %}</select>
+      <label>密碼（至少 8 個字元）</label><input name="password" type="password" autocomplete="new-password" required>
+      <div class="btns"><button class="primary" type="submit">新增</button></div>
+    </form>
+  </div>
+</main>
+{% endblock %}

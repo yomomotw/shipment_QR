@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}系統設定{% endblock %}
+{% block body %}
+<main class="narrow">
+  <div class="card">
+    <h2>系統設定</h2>
+    {% if saved %}<div class="msg o">已儲存。</div>{% endif %}
+    {% for e in errors %}<div class="msg e">{{ e }}</div>{% endfor %}
+    <form method="post" action="/admin/settings">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>叫修電話 <span class="req">*</span></label>
+      <input name="service_tel" value="{{ s.service_tel }}" placeholder="例：0800-123-456">
+      <div class="hint">印在標籤上，也寫進 QR。修改後只影響之後新建的設備。</div>
+      <label>預設保固月數</label>
+      <input name="default_warranty_months" type="number" min="0" value="{{ s.default_warranty_months }}">
+      <label>對外網址（可先留空）</label>
+      <input name="public_base_url" value="{{ s.public_base_url }}" placeholder="例：https://service.example.com">
+      <div class="hint">線上報修網址的開頭。留空時 QR 裡只有資料；填入後，新建設備的 QR 最後會多一行報修網址。</div>
+      {% if need_confirm %}
+      <div class="msg w" style="margin-top:10px">你正在修改已經使用中的對外網址。已經貼出去的標籤上印的是舊網址，舊網域必須保留並轉址到新網域，否則那些標籤的線上報修網址會失效（基本資料仍然讀得到）。
+        <div class="checks"><label><input type="checkbox" name="confirm_url_change" value="yes"> 我了解，確定要修改</label></div></div>
+      {% endif %}
+      <div class="btns"><button class="primary" type="submit">儲存</button></div>
+    </form>
+  </div>
+  <div class="card"><h2>Email 通知</h2><p class="hint">寄信設定在第二階段加入。</p></div>
+</main>
+{% endblock %}

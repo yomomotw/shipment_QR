@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block head %}<script src="/static/vendor/qrcode.js"></script><script src="/static/label.js"></script>{% endblock %}
+{% block body %}
+<main>
+  <div class="card">
+    <h2 class="no-print">{{ title }}（{{ rows|length }} 張）</h2>
+    <div class="toolbar no-print">
+      <div><label>版面</label>
+        <select id="layout"><option value="grid">A4 拼版（印完剪下）</option><option value="single">標籤機（一張一頁）</option></select></div>
+      <div><label>標籤尺寸</label>
+        <select id="size">{% for s in sizes %}<option value="{{ s }}" {{ 'selected' if s == size }}>{{ s.replace('x', ' × ') }} mm</option>{% endfor %}</select></div>
+      <button class="primary" id="print">列印 / 存成 PDF</button>
+      <button id="zip">下載全部 QR 圖檔 (ZIP)</button>
+      <button id="csv">下載清單 (CSV)</button>
+      <a class="btn" href="/devices">回台帳</a>
+    </div>
+    <div id="warn" class="no-print"></div>
+    <div class="sheet-wrap"><div class="sheet" id="sheet"></div></div>
+  </div>
+</main>
+<script id="rows" type="application/json">{{ rows|tojson }}</script>
+<script>
+(() => {
+  const rows = JSON.parse(document.getElementById('rows').textContent);
+  const $ = id => document.getElementById(id), name = {{ export_name|tojson }};
+  function draw() {
+    const size = $('size').value;
+    ShipLabel.renderSheet($('sheet'), rows, size, $('layout').value);
+    const dense = rows.some(r => ShipLabel.density(r.payload, size).tooDense);
+    $('warn').innerHTML = dense ? '<div class="msg w">這個尺寸下 QR 偏密，可能不好掃。建議選大一點的標籤。</div>' : '';
+  }
+  $('size').onchange = draw; $('layout').onchange = draw;
+  $('print').onclick = () => window.print();
+  $('csv').onclick = () => ShipLabel.download(ShipLabel.csvBlob(rows), `labels_${ShipLabel.safeName(name)}.csv`);
+  $('zip').onclick = async () => { $('zip').disabled = true; ShipLabel.download(await ShipLabel.zipBlob(rows), `QR_${ShipLabel.safeName(name)}.zip`); $('zip').disabled = false; };
+  draw();
+})();
+</script>
+{% endblock %}
